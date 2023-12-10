@@ -350,3 +350,119 @@ kubectl get pods
 kubectl describe pod my-app
 ```
 
+## ReplicaSets
+
+### Replication Controller
+
+- High availability
+- load balancing and scaling: replication can span across nodes
+
+### Replication controller vs replicaSets
+
+- replication controller is the older technology that is being replaced by replica sets, there are minor difference both
+
+### how to create replication controller?
+- rc-definition.yml
+``` YAML
+apiVersion: v1
+kind: ReplicationController
+metadata:
+    name: my-app-rc
+    labels:
+        app: my-app
+        env: testing
+        type: frontend
+spec:
+    template:
+        metadata:  
+        labels:
+            app: myapp
+            type: frontend
+        spec:
+            containers:
+            - name: nginx-container
+              image: nginx
+    replicas: 3
+```
+
+```
+kubectl create -f rc-definition.yml
+kubectl get replicationcontroller
+kubectl get pods
+```
+- replicaset-definition.yml
+```YAML
+apiVersion: v1
+kind: ReplicaSet
+metadata:
+    name: my-app-replicaset
+    labels:
+        app: my-app
+        env: testing
+spec:
+    template:
+        metadata:  
+        labels:
+            app: myapp
+            type: frontend
+        spec:
+            containers:
+            - name: nginx-container
+              image: nginx
+    replicas: 3
+    selector:
+        matchLabels:
+            type: frontend
+```
+
+```
+kubectl create -f replicaset-definition.yml
+kubectl get replicaset
+kubectl get pods
+```
+
+- why do we label things in k8s?
+### Labels and Selectors
+
+- the role of the replicaset is to monitor the pods and deploy new ones if any of them fails
+- how do replicasets know what to monitor
+- this is where labeling comes handy, we could now provide this labels as filters for replicasets
+
+### Scaling Replica Sets
+- update the yaml file
+```YAML
+apiVersion: v1
+kind: ReplicaSet
+metadata:
+    name: my-app-replicaset
+    labels:
+        app: my-app
+        env: testing
+spec:
+    template:
+        metadata:  
+            labels:
+                app: myapp
+                type: frontend
+        spec:
+            containers:
+            - name: nginx-container
+              image: nginx
+    replicas: 6
+    selector:
+        matchLabels:
+            type: frontend
+```
+```
+kubectl replace -f replicaset-definition.yml
+```
+
+- another ways is to run kubectl scale command
+
+```
+kubectl scale --replicas=6 -f replicaset-definition.yml
+```
+
+```
+kubectl scale --replicas=6 replicaset my-app-replicaset
+```

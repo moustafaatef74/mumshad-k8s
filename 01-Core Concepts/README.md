@@ -1,4 +1,4 @@
-# Mumshad CKA Course Notes
+# Core Concepts
 
 ## Cluster Architecture
 
@@ -319,7 +319,7 @@ kubectl get pods
 
 - spec is the specification of the object, it's different for every kind of object, it's a dictionary
 
-```
+``` YAML
 apiVersion: v1
 kind: Pod
 metadata:
@@ -465,4 +465,223 @@ kubectl scale --replicas=6 -f replicaset-definition.yml
 
 ```
 kubectl scale --replicas=6 replicaset my-app-replicaset
+```
+
+## K8s Deployments
+
+### Rolling updates
+
+When you upgrade you instances you want to upgrade the instances gradually, to not affect end user experience
+
+### K8s Deployment
+
+- Definition: 
+``` YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: myapp-deployment
+    labels:
+        app: myapp
+        type: front-end
+spec:
+    template:
+        metadata:
+            name: myapp-pod
+            labels:
+                app: myapp
+                type: front-end
+            spec:
+                containers:
+                - name: nginx-controller
+                  image: nginx
+    replicas: 3
+    selector:
+        matchLabels:
+            type: front-end
+```
+```
+kubectl create -f deployment-definition.yml
+kubectl get deployments
+kubectl get replicaset
+kubectl get pods
+```
+## K8s Services
+
+### External communication
+
+### How to access a pod's internal IP inside a K8s cluster?
+
+- There is where the k8s service comes to play, it's an object like (pods, replicasets, deployemnts) that listens to a port on a node and forward requests to the pod.
+
+### Kinds of services
+
+- NodePort; where a service makes an internal port accessible on a port on a node
+- ClusterIP; where a service makes a virtual ip inside a cluster to enable communication between different services
+- LoadBalancer; where a service provisions a load balancer for our application in supported cloud providers.
+
+### NodePort
+
+- There a 3 port mappings
+    - TargetPort: where the application is running on the pod
+    - Port (Service Port): the service is like a virtual server on the node, inside the cluster it has its own IP address which is the called the cluster ip of the service
+    - NodePort: it's used to access the webserver externally, which is by default between the 30000-32767 range
+
+### Service Yaml
+```YAML
+apiVersion: v1
+kind: Service
+metadata:
+    name: myapp-service
+spec:
+    type: NodePort
+    ports:
+        - targetPort: 80 # can be left empty and it will be the same as port
+          port: 80
+          nodePort: 30008 # can be left empty and it will auto assign
+    selector:
+        app: myapp
+        type: frontend
+```
+
+## K8s Service ClusterIP
+
+### What is the best way to establish communication in a multi-pod, multi-tier application?
+
+- A service created between tiers can enable communication between services, this type of service is called clusterIP
+
+```YAML
+apiVersion: v1
+kind: Service
+metadata:
+    name: backend
+spec:
+    type: ClusterIP
+    ports:
+        - targetPort: 80
+          port: 80
+    selector:
+        app: myapp
+        type: backend
+```
+
+## Load Balancer Service
+
+```YAML
+apiVersion: v1
+kind: Service
+metadata:
+    name: myapp-service
+spec:
+    type: LoadBalancer
+    ports:
+        - targetPort: 80
+          port: 80
+          nodePort: 30008
+```
+
+## Namespaces in K8s
+
+### In a nutshell
+
+- Imaging 2 kids named Mark, one is named Mark Williams and the other is Mark Smith, we call them by their last names, the individuals in both houses address both Marks by their first name, however if they want to address individuals in the other house they use the full name, each of these houses have their own roles and resources that they can consume
+
+- So far we have created objects in the default namespace, it's known as the default namespace.
+
+- K8s create internal pods and services in another namespace called kube-system, another namespace created by k8s kube-public there is where resource which are available for all users are created.
+
+- if your environment is small you should not really worry about namespaces.
+
+- you can create your own namespaces, for example: testing, staging and production.
+
+```
+kubectl get pods --namespace=kube-system
+
+kubectl create -f pod-definition.yml --namespace=dev
+```
+- You can also move the namespace definition to the YAML file
+``` YAML
+apiVersion: v1
+kind: Pod
+metadata:
+    name: my-app
+    namespace: dev
+    labels:
+        env: prod
+        type: backend
+        stack: crm
+spec:
+    containers:
+        - name: nginx-container
+          image: nginx
+```
+
+### How to create a Namespace?
+
+``` YAML
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: dev
+```
+
+### how to switch between namespaces?
+
+```
+kubectl config set-context $(kubectl config current-context) --namespace=dev
+```
+
+- to target all namespaces
+
+```
+kubectl get pods --all-namespaces
+```
+
+### Resource Quota
+
+-  To limit the resources consumed by a namespace you can setup a resource quota
+
+``` YAML
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+    name: compute-quota
+    namespace: dev
+spec:
+    hard:
+        pods: "10"
+        requests.cpu: "4"
+        requests.memory: 5Gi
+        limits.cpu: "10"
+        limits.memory: 10Gi
+```
+
+## Imperative vs declarative
+
+- imperative is specifying what and how to do
+- declarative is declaring the final result
+
+### Declarative Approach 
+```
+kubectl apply -f my-pod.yml
+```
+
+### Imperative Approach 
+- Create Objects
+```
+kubectl run nginx --image=nginx
+kubectl create deployment nginx --image=nginx
+kubectl expose deployment nginx --port 80
+```
+- Update Objects
+```
+kubectl edit deployment nginx
+kubectl scale deployment nginx --replicas=5
+kubectl set image deployment nginx nginx=nginx:1.18
+```
+- Using Config Files
+```
+kubectl create -f my-pod.yml
+kubectl replace -f my-pod.yml
+kubectl delete -f my-pod.yml
 ```

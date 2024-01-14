@@ -31,4 +31,3 @@ kubectl create -f ./kubernetes-metrics-server
 kubectl logs -f event-simulation-pod
 kubectl logs -f event-simulation-pod event-simulator
 ```
-

@@ -99,3 +99,196 @@ spec:
           command: ["echo"] #entrypoint
           args: ["10"] #command
 ```
+
+## ENV Vars in K8s
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+    name: ubuntu-sleeper-pod
+spec:
+    containers:
+        - name: ubuntu-sleeper
+          image: ubuntu-sleeper
+          ports:
+            - containerPort: 8080
+        env:
+            - name: APP_COLOR
+              value: pink
+            - name: APP_NAME
+              valueFrom:
+                configMapKeyRef:
+            - name: APP_ENV
+              valueFrom:
+                secretKeyRef:
+```
+
+## ConfigMaps
+
+Config Maps are used to pass configuration data to pods when created
+
+```bash
+kubectl create configmap \
+<config-name> --from-literal=<key>=<value>
+```
+
+```yaml
+apiVersion: v1
+kind: configMap
+metadata:
+    name: app-config
+data:
+    APP_COLOR: blue
+    APP_MODE: prod
+```
+
+to view configMaps
+
+```
+kubectl get configmaps
+kubectl describe configmaps
+```
+
+### ConfigMaps in Pods
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+    name: simple-webapp-color
+spec:
+    containers:
+        - name: simple-webapp-color
+          image: simple-webapp-color
+          ports:
+            - containerPort: 8080
+            envFrom:
+                - configMapRef:
+                    name: app-config
+```
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+    name: simple-webapp-color
+spec:
+    containers:
+        - name: simple-webapp-color
+          image: simple-webapp-color
+          ports:
+            - containerPort: 8080
+        env:    
+            - name: APP_COLOR
+              valueFrom:
+                configMapKeyRef:
+                    name: app-config
+                    key: APP_COLOR
+
+```
+
+## K8s Secrets
+
+```bash
+kubectl create secret generic \
+<secret-name> --from-literal=<key>=<value>
+```
+
+```YAML
+aviVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  DB_HOST: mysql
+  DB_USER: root
+  DB_PASSWORD: pswd1234
+```
+
+### Configuring Secrets with Pods
+
+ENV
+
+```YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+    - name: simple-webapp-color
+      image: simple-webapp-color
+      ports:
+        - containerPort: 8080
+      envFrom:
+        - secretRef:
+            name: app-secret
+```
+SINGLE ENV
+
+```YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+    - name: simple-webapp-color
+      image: simple-webapp-color
+      ports:
+        - containerPort: 8080
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: DB_PASSWORD
+```
+
+VOLUME
+
+```YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+    - name: simple-webapp-color
+      image: simple-webapp-color
+      ports:
+        - containerPort: 8080
+      volumes:
+        - name: app-secret-volume
+          secret:
+              secretName: app-secret
+```
+### Things to keep in mind
+
+- Secrets are not encrypted they are encoded
+    - Don't check-in Secret object to SCM along with code
+- Secrets are not encrypted in ETCD
+    - Enable Encryption at rest
+- Anyone is able to create pods/deployments in the same namespace can access the secrets
+    - Configure least-privilege access to Secrets - RBAC
+- Consider third party secret store providers AWS Provider, Azure Provider, GCP Provider, Vault Provider
+
+## Multi-container Pods
+
+```YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+  labels:
+    name: simple-webapp-color
+spec:
+  containers:
+    - name: simple-webapp-color
+      image: simple-webapp-color
+      ports:
+        - containerPort: 8080
+    - name: log-agent
+      image: log-agent
+```

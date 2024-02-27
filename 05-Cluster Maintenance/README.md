@@ -78,3 +78,35 @@ kubeadm upgrade node config --kubelet-version v1.12.0
 systemctl restart kubelet
 kubectl uncordon node-1
 ```
+
+## Backup And Restore Methods
+
+- you can use declarative approach and push your files to github as a source control and version management
+
+### Backup Resource configs
+
+```bash
+kubectl get all --all-namespaces -o yaml > all-deployed-services.yaml
+```
+
+### Backup ETCD
+
+When configuring the etc we specify the data dir of the etc
+```bash
+--data-dir=/var/lib/etcd
+```
+
+- you can take a snapshot of the etcd db using the etcdctl snapshot save snapshot.db
+
+### Restoring ETCD
+
+```bash
+service kube-apiserver stop
+ETCDCTL_API=3 \
+etcdctl snapshot restore snapshot.db \
+--data-dir /var/lib/etcd-from-backup
+systemctl daemon-reload
+service etcd restart
+service kube-apiserver start
+```
+

@@ -54,9 +54,9 @@ How Does the kubeapi server authenticates
 
 ## TLS Certificates
 
-A certificate is used to gurantee trust between 2 parties during a transaction, TLS ensures that the communication is secrue and the server is who it says it is
+A certificate is used to guarantee trust between 2 parties during a transaction, TLS ensures that the communication is secure and the server is who it says it is
 
-The problem with symemetric encryption is that the key used to encrypt data is sent along to the server, so the attack might be able to get the key to the data.
+The problem with symmetric encryption is that the key used to encrypt data is sent along to the server, so the attack might be able to get the key to the data.
 
 ## TLS in K8s
 
@@ -66,13 +66,13 @@ Types of certificates:
 - Root Certificates (CA)
 - Client Certificates (Client)
 
-The K8s cluster consists of a master and workers nodes, All interaction between the server and the client must be secured, communication between all the components of the K8s cluster must be secured, the 2 primary requirments are to have all the various server within the cluster to use server cettificates and the client to use client certificates to verify that they are who they say they are.
+The K8s cluster consists of a master and workers nodes, All interaction between the server and the client must be secured, communication between all the components of the K8s cluster must be secured, the 2 primary requirements are to have all the various server within the cluster to use server certificates and the client to use client certificates to verify that they are who they say they are.
 
 ### Server Components
 
 kube-api Server
 
-- api server exposes a https service that other ccomponents and external user use to manage the cluster, so generate a certificate and a key pair
+- api server exposes a https service that other components and external user use to manage the cluster, so generate a certificate and a key pair
 - apiserver.crt
 - apiserver.key
 
@@ -117,12 +117,12 @@ Kube-api server
 
 ### Certificate Authority
 
-#### Genrating Key
+#### Generating Key
 ```
 openssl genrsa -out ca.key 2048
 ```
 
-#### Genrating certificate signing request
+#### Generating certificate signing request
 ```
 openssl req -new -key ca.key -subj "/CN=KUBERNETES-CS" -out ca.csr
 ```
@@ -135,12 +135,12 @@ openssl x509 -req -in ca.csr -signkey ca.key -out ca.crt
 
 ### Admin User
 
-#### Genrating Key
+#### Generating Key
 ```
 openssl genrsa -out kube-admin.key 2048
 ```
 
-#### Genrating certificate signing request
+#### Generating certificate signing request
 ```
 openssl req -new -key kube-admin.key -subj "/CN=kube-admin/O=system:masters" -out kube-admin.csr
 ```
@@ -185,7 +185,7 @@ users:
 
 #### ETCD
 
-We follow the same steps as previous, ETCD can be deployed as a cluster across multiple servers as in a HA environment, to secure communication between the different memebers within the cluster we must generate additional peer certificates, once peer certificates are generated specify them when starting the ETCD server
+We follow the same steps as previous, ETCD can be deployed as a cluster across multiple servers as in a HA environment, to secure communication between the different members within the cluster we must generate additional peer certificates, once peer certificates are generated specify them when starting the ETCD server
 
 ```yaml
 - etcd
@@ -207,7 +207,7 @@ We follow the same steps as previous, ETCD can be deployed as a cluster across m
 
 #### Kube API Server
 
-Genrating Key
+Generating Key
 ```
 openssl genrsa -out apiserver.key 2048
 ```
@@ -216,7 +216,7 @@ Genrating certificate signing request
 ```
 openssl req -new -key apiserver.key -subj "/CN=kube-apiserver" -out apiserver.csr -config openssl.cnf
 ```
-openss.cnf
+openssl.cnf
 ```conf
 [req]
 req_extentions = v3_req
@@ -262,7 +262,7 @@ ExecStart=/usr/local/bin/kube-apiserver
 
 #### Kubelet Server
 
-The certificate for the kubelet server, it's a https sever responisble for managing the node.
+The certificate for the kubelet server, it's a https sever responsible for managing the node.
 
 you need a key pair for every node, how to name the certificates?
 
@@ -344,13 +344,13 @@ kubectl get csr jane -o yaml
 echo ${{status.certificate}} | base64 --decode
 ```
 
-All the certificate related operation are carried out by the controller manager, it hase controllers such as csr approving, csr signing
+All the certificate related operation are carried out by the controller manager, it has controllers such as csr approving, csr signing
 
-We know that if anayone has to sign certificates, they nade the ca root certificate and private key, the controller manager has 2 options where you can specify this
+We know that if anyone has to sign certificates, they need the ca root certificate and private key, the controller manager has 2 options where you can specify this
 
 ## Kube Config
 
-instead of sending the certificate, key, ca everytime you use kubeapi
+instead of sending the certificate, key, ca every time you use kubeapi
 
 ```bash
 kubectl get pods \
@@ -422,3 +422,537 @@ What about namespaces?
 Certificates
 
 - you can replace certificate-authority field in cluster with certificate-authority-data and add the certificate content converted to base64
+
+## API Groups
+
+What is the K8s API?
+
+- We learned about kubeapi-server, whatever operation we've done so far with the cluster, we've been interacting with the apiserver wither with the kubectl utility or by rest
+
+```
+curl https://kube-master:6443/version
+curl https://kube-master:6443/api/v1/pods
+```
+
+### Core Groups APIs
+
+- /api
+  - /v1
+    - namespaces
+    - pods
+    - rc
+    - events
+    - endpoints
+    - nodes
+    - bindings
+    - PV
+    - PVC
+    - configmaps
+    - secrets
+    - services
+
+### Named Group APIs
+
+- /apis
+  - /apps
+    - /v1
+      - /deployments
+        - list
+        - get
+        - create
+        - delete
+        - update
+        - watch
+      - /replicasets
+      - /statefulsets
+  - /extentions
+  - /networking.k8s.io
+    - /v1
+      - /networkpolicies
+  - /storage.k8s.io
+  - /authentication.k8s.io
+  - /certificates.k8s.io
+    - /v1
+      - /certificatesigningrequests
+
+### Kubectl Proxy
+
+user -> kubectl proxy -> kube apiserver
+```
+kubectl proxy
+curl http://localhost:8001 -k
+```
+
+- kube proxy != kubectl proxy
+
+## Authorization
+
+As an admin you able to preform any operation on the cluster, but soon other will have access on the cluster like developers and 3rd party apps like monitoring apps or CI applications.
+
+### Authorization Mechanisms
+
+- Node
+- ABAC
+- RBAC
+- Webhook
+
+The Kubeapi server is accessed by kubelets, these requests are handled by a special authorizer called node authorizer, kubelet certificate should have a prefix system:node:node01 for example
+
+#### ABAC
+
+External access to kubeapi, for example dev-user can view, create and delete pods. you do this by creating a policy file by passing a json format like this
+
+```json
+{
+  "kind": "Policy",
+  "spec":{
+    "user":"dev-user",
+    "namespace":"*",
+    "resource":"pods",
+    "apiGroup":"*"
+  }
+}
+```
+
+```json
+{
+  "kind": "Policy",
+  "spec":{
+    "group":"developers",
+    "namespace":"*",
+    "resource":"pods",
+    "apiGroup":"*"
+  }
+}
+```
+
+This can be tedious to manage as will have to pass this json to the kubeapi every time you need to grant access
+
+#### RBAC
+
+RBAC make this much easier, instead of associating a user directly with a set of permission, we define a role
+
+for example we create a role for developers then we associate all the developers with that role same for security engineers
+
+#### Webhook
+
+What if we want to outsource our authorization mechanism?
+
+For instance Open Policy Agent is a third party tool that help with admission control and authorization we can have k8s make an api call to open policy agent and with the info about the user and access requirements, then have OPA decide whether if the user should be permitted or no
+
+#### Always Allow and Always Deny
+
+
+## RBAC
+
+How do we create a role?
+- We do that by creating a role object
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "get", "create", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["ConfigMap"]
+    verbs: ["create"]
+```
+
+Each rule has 3 sections apiGroup, resources, verbs
+
+The Next step is to link the user to that role, for this we create another object called role binding
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devuser-developer-binding
+subjects:
+  - kind: User
+    name: dev-user
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  - kind: Role
+    name: developer
+    apiGRoup: rbac.authorization.k8s.io
+```
+
+The role bindings fall under scope of name spaces
+
+To View the created roles
+```bash
+kubectl get roles
+```
+
+To View rolebindings
+```bash
+kubectl get rolebindings
+```
+
+To View more details about the role
+```bash
+kubectl describe role developer
+```
+
+To View more details about the rolebinding
+```bash
+kubectl describe rolebinding devuser-developer-binding
+```
+
+How to know if you have access to a resource in a cluster?
+
+```bash
+kubectl auth can-i create deployments
+kubectl auth can-1 delete nodes
+```
+
+What if you want to impersonate another user and check their access?
+
+```bash
+kubectl auth can-i create deployments --as dev-user
+kubectl auth can-1 create pods --as dev-user
+```
+
+You can also specify the namespace in the command
+
+
+```bash
+kubectl auth can-1 create pods --as dev-user --namespace test
+```
+
+You can restrict access to specific resources to specific resources by adding resourceNames
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "get", "create", "update", "delete"]
+    resourceNames: ["blue-pod", "green-pod"]
+```
+
+## Cluster Roles
+
+Cluster roles are like roles but for cluster-scoped resources
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-administrator
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["list","get","create", "delete"]
+```
+
+To link this role to a user you create a cluster role binding
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-admin-role-binding
+subjects:
+  - kind: User
+    name: cluster-admin
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  - kind: Role
+    name: cluster-administrator
+    apiGRoup: rbac.authorization.k8s.io
+```
+
+You can create cluster roles for namespace-scoped resource but the access of these resources won't be binded to the namespace but rather all the resources in the cluster
+
+## Service Accounts
+
+The concept of service account is related to another security concepts in k8s such s authentication, authorization, RBAC, etc
+
+There are 2 types of accounts in k8s
+
+- User Accounts
+- Service Account
+
+```bash
+kubectl create serviceaccount dashboard-sa
+kubectl get serviceaccount
+kubectl describe serviceaccount dashboard-sa
+```
+
+When a service account is created a token is created and saved in a secret
+
+```bash
+kubectl describe secret dashboard-sa-token-kbbdm
+```
+
+If the dashboard application is deployed in the k8s cluster you can mount the secret token as a volume to the pod and then the application can read it
+
+A default service account is automatically create within a namespace
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-k8s-dashboard
+spec:
+  containers:
+    - name: my-k8s-dashboard
+      image: my-k8s-dashboard
+  serviceAccountName: dashboard-sa
+```
+You can choose not to mount the default service account
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-k8s-dashboard
+spec:
+  containers:
+    - name: my-k8s-dashboard
+      image: my-k8s-dashboard
+  automountServiceAccountToken: false
+```
+
+In Version 1.24 when creating a service account, it no longer creates a secret or a token access secret, so you must run this command
+
+```bash
+kubectl create token dashboard-sa
+```
+to generate a token for the service account and it will print that token on the screen, it will have a default expiry of 1 hour
+
+If you want to create a non-expiring token you can create a secret object like this
+
+```yaml
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: mysecrettoken
+  annotations:
+    kubernetes.io/service-account.name: dashboard-sa
+```
+
+## Image Security
+
+```yaml
+image: nginx
+```
+
+This image reference docker library which is docker.io/library/nginx, where library is the user account docker.io is the registry
+
+To use an image from our private registry
+
+```bash
+kubectl create secret docker-registry regcred \ 
+--docker-server=privat-registry.io  \
+--docker-username=username  \
+--docker-password=password  \
+--docker-email=registry-user@org.com
+```
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+spec:
+  containers:
+    - name: nginx
+      image: private-registry.io/app/internal-app
+  imagePullSecrets:
+    - name: regcred
+```
+
+## Security Contexts
+
+```bash
+docker run --user=1001 ubuntu sleep 3600
+docker run --cap-add MAC_ADMIN ubuntu sleep 3600
+docker run --privileged ubuntu sleep 3600
+```
+
+These can be configured in k8s as well, you can choose to configure the security settings on the pod or the container level, when on the pod level the setting will apply to all containers
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+spec:
+  securityContext:
+    runAsUser: 1001
+  containers:
+    - name: ubuntu
+      image: ubuntu
+      command: ["sleep","3600"]
+```
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+spec:
+  containers:
+    - name: ubuntu
+      image: ubuntu
+      command: ["sleep","3600"]
+      securityContext:
+        runAsUser: 1001
+        capabilities:
+          add: ["MAC_ADMIN"]
+```
+
+## Network Policies
+
+### Traffic
+
+You have a 3 tier application, where the frontend server listens on port 80 and sends data to the backend server on port 5000, then the backend server sends and receives the data to the database server on port 3306
+
+There are 2 types of traffic, ingress and egress
+
+So the frontend server has ingress on port 80 and egress on port 5000, backend on port 5000 and 3306 respectively and the database only have ingress on port 3306
+
+### Network Security
+
+Assume we have 3 nodes with different pods deployed in each node, by default k8s have an always allow rule that allows any pod to communicated with any other pod within the vpc of the cluster
+
+what if you want the frontend server to not be able to communicate with the db server, there is where you implement a network policy
+
+A network policy is an object in k8s namespace just like pods and replicasets.
+
+Once a policy is created it only allows the rules defined and blocks otherwise
+
+We can use the same technique to link replicasets or services to a pod, which is labels and selectors.
+
+We label the pod to use the same label on the port selector field in the network policy then we build our rule.
+
+Pod Definition
+
+```yaml
+.
+.
+.
+labels:
+  role: db
+.
+.
+.
+.
+```
+ Network Policy Definition
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-policy
+spec:
+  podSelector:
+    matchlabels:
+      role: db
+  policyType:
+  - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            name: api-pod
+      ports:
+        - protocol: TCP
+          port: 3306
+```
+
+## Developing network policies
+
+For example we want to block any traffic coming in or unless it's through port 3306 from the api pod
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyType:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            name: api-pod
+      ports:
+        - protocol: TCP
+          port: 3306
+```
+
+what if there are multiple api pods in multiple namespaces
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyType:
+    - Ingress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            name: api-pod
+        namespaceSelector:
+          matchLabels:
+            name: prod
+      ports:
+        - protocol: TCP
+          port: 3306
+```
+
+what if we have an external server that needs to connect to our database
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyType:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            name: api-pod
+        namespaceSelector:
+          matchLabels:
+            name: prod
+      - ipBlock:
+          cidr: 192.168.5.10/32
+      ports:
+        - protocol: TCP
+          port: 3306
+  egress:
+    - to:
+      - ipBlock:
+          cidr: 192.168.5.10/32
+      ports:
+        - protocol: TCP
+          port: 80
+```

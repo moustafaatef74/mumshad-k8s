@@ -678,4 +678,142 @@ Finally, the ETCD server listens on port 2379.
 
 If you have multiple master nodes, all of these ports need to be open on those as well, and you also need an additional port, 2380, open, so the ETCD clients can communicate with each other.
 
-The list of ports to be opened are also available in the Kubernetes' documentation page. So consider these when you set up networking for your nodes in your firewalls or IP table rules or network security group in a cloud environment, such as GCP or Azure or AWS, and if things are not working, this is one place to look for while you're investigating.
+The list of ports to be opened are also available in the Kubernetes' documentation page. So consider these when you set up networking for your nodes in your firewalls or IP table rules or network security group in a cloud environment, such as GCP or Azure or AWS, ad if things are not working, this is one place to look for while you're investigating.
+
+## Pod Networking Concepts
+
+Our K8s cluster is soon going to have a large number of pods and services running on it.
+
+How are the pods addressed and how do they communicate with each other, how do you access the services running on these pods internally within the cluster as well as externally from outside the cluster.
+
+These challenges K8s expects you to solve.
+
+As of today K8s does not have a built in solution for networking, it expects you to implement a networking solution for these challenges.
+
+However K8s has laid out clearly the requirements for pod networking.
+
+Kubernetes expects every pod to:
+- get its own unique IP address
+- that every pod should be able to reach every other pod within the same node using that IP address.
+- every pod should be able to reach every other pod on other nodes as well using the same IP address.
+
+It doesn't care what IP address that is and what range or subnet it belongs to. As long as you can implement a solution that takes care of automatically assigning IP addresses and establish connectivity between the pods in a node as well as pods on different nodes, you're good. Without having to configure any NAT rules.
+
+So how do you implement a model that solves these requirements?
+
+Lets use our networking concepts, routing, ip address management, namespaces and CNI
+
+Consider a cluster with 3 pods
+
+the nodes a re part of an external network 192.168.1.0 and have IPs 192.168.1.11, 12 and 13 respectively
+
+K8s creates a network names spaces for containers created to allow communication we attach these network namespaces to a network, but which network?
+
+So we create a bridge network on each node and the bring them up and assign IP addresses to the brigde interfaces or networks, but what IP address?
+
+We decided that each bridge network will be on its own subnet
+
+Choose any private address range, say, 10.240.1, 10.240.2 and 10.240.3. respectively for each node
+
+Next, we set the IP address for the bridge interface.
+
+The remaining steps are to be performed for each container and every time a new container is created, so we write a script for it.
+
+Now, you don't have to know any kind of complicated scripting. It's just a file that has all commands we will be using. And we can run this multiple times for each container going forward. To attach a container to the network, we need a pipe or a virtual network cable. We create that using the ip link add command.
+
+So we have solved the first part of the challenge. The pods all get their own unique IP address and are able to communicate with each other on their own nodes. The next part is to enable them to reach other pods on other nodes.
+
+Add a route to node 1's routing table to route traffic to 10.244.2.2 where the second node's IP at 192.168.1.12. Once the route is added, the blue pod is able to pinging across. Similarly, we configure route on all hosts to all the other hosts with information regarding the respective networks within them. Now, this works fine in this simple setup, but this will require a lot more configuration, as in when your underlying network architecture gets complicated.
+
+
+Instead of having to configure routes on each server, a better solution is to do that on a router if you have one in your network and point all hosts to use that as the default gateway. That way you can easily manage routes to all networks in the routing table on the router. With that, the individual virtual networks we created with the address 10.244.1.0/24 on each node now form a single large network with the address 10.244.0.0/16.
+
+
+It's time to tie everything together.
+- We performed a number of manual steps to get the environment ready with the bridge networks and routing tables.
+- We then wrote a script that can be run for each container that performs the necessary steps required to connect each container to the network.
+- We executed the script manually.
+
+Of course, we don't want to do that as in large environments where thousands of pods are created every minute. So how do we run the script automatically when a pod is created on Kubernetes?
+
+That's where CNI comes in acting as the middleman. CNI tells Kubernetes that this is how you should call a script as soon as you create a container. And CNI tells us, "This is how your script should look like." So we need to modify the script a little bit to meet CNI standards.
+
+It should have:
+
+An ADD section that will take care of adding a container to the network
+
+A DELete section that will take care of deleting container interfaces from the network and freeing the IP address, etc.
+
+The container runtime on each node is responsible for creating containers. Whenever a container is created, the container runtime looks at the CNI configuration passed as a command line argument when it was run
+
+Container Runtime
+
+v
+
+
+/etc/cni/net.d/net-script.conflist
+
+v
+
+/opt/cni/bin/net-script.sh
+
+v
+
+```
+./net-script.sh add <container> <namespace>
+```
+
+## CNI in Kubernetes
+
+So where do we specify the CNI plugins for Kubernetes to use? The CNI plugin must be invoked by the component within Kubernetes that is responsible for creating containers because that component must then invoke the appropriate network plugin after the container is created.
+
+The CNI plugin is configured in the kubelet Service on each node in the cluster. If you look at the kubelet Service file you will see an option called network plugin set to CNI. You can see the same information on viewing the Running kubelet service.
+
+```
+ps aux | grep kubelet
+```
+
+The CNI bin directory has all the supported CNA plugins as executables
+
+```
+ls /opt/cni/bin
+```
+
+```bash
+ls /etc/cni/net.d
+cat /etc/cni/net.d/10-bridge.conf
+```
+```json
+{
+    "cniVersion": "0.2.0",
+    "name": "mynet",
+    "type": "bridge",
+    "bridge": "cni0",
+    "isGateway": true,
+    "isMasq": true,
+    "ipam":{
+        "type": "host-local",
+        "subnet": "10.22.0.0/16",
+        "routes":[
+            {
+                "dst": "0.0.0.0/0"
+            }
+        ]
+    }
+}
+```
+## CNI Weave
+
+When weave cni plugin is deployed on a cluster it deploys an agent on each node. they communicate with each other to exchange information regarding the nodes and networks and pods within them, each agent or peer stores a topology of the entire setup, that way they know the pods and their IPs on the other nodes.
+
+Weave creates its own bridge on the nodes and names at weave, then assigns IP address to each network
+
+Now, when a packet is sent from one pod to another on another node, Weave intercepts the packet and identifies that it's on a separate network, it then encapsulates this packet into a new one with new source and destination and sends it across the network. Once on the other side, the other Weave agent retrieves the packet, decapsulates it, and routes the packet to the right pod.
+
+So how do we deploy Weave on a Kubernetes cluster?
+
+Weave and Weave Peers can be deployed as services or daemons on each node in the cluster manually, or if Kubernetes is set up already, then an easier way to do that is to deploy it as pods in the cluster.
+
+```bash
+kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+```
